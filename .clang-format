@@ -1,0 +1,8 @@
+# デフォルト設定
+BasedOnStyle: Google
+
+# インデント幅
+# IndentWidth: 4
+
+# 自動改行させない
+# ColumnsLimit: 0
