@@ -71,6 +71,7 @@ void debugger::single_step_instruction() {
   wait_for_signal();
 }
 
+
 void debugger::single_step_instruction_with_breakpoint_check() {
   // first, check to see if we need to disable and enable a breakpoint
   if (m_breakpoints.count(get_pc())) {
