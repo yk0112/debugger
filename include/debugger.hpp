@@ -8,19 +8,19 @@
 #include "dwarf/dwarf++.hh"
 #include "elf/elf++.hh"
 class debugger {
- public:
+public:
   debugger(std::string prog_name, pid_t pid)
       : m_prog_name{std::move(prog_name)}, m_pid{pid} {
     auto fd = open(m_prog_name.c_str(), O_RDONLY);
 
-    m_elf = elf::elf{elf::create_mmap_loader(fd)};             // ELF file生成
-    m_dwarf = dwarf::dwarf{dwarf::elf::create_loader(m_elf)};  // dwarf file生成
+    m_elf = elf::elf{elf::create_mmap_loader(fd)};            // ELF file生成
+    m_dwarf = dwarf::dwarf{dwarf::elf::create_loader(m_elf)}; // dwarf file生成
   }
 
   void run();
 
- private:
-  void handle_command(const std::string& line);
+private:
+  void handle_command(const std::string &line);
   void continue_execution();
   void set_breakpoint_at_address(std::intptr_t addr);
   void dump_registers();
@@ -34,13 +34,18 @@ class debugger {
   void initialise_load_address();
   uint64_t offset_load_address(uint64_t addr);
   void handle_sigtrap(siginfo_t info);
-  void print_source(const std::string& file_name, unsigned line,
+  void print_source(const std::string &file_name, unsigned line,
                     unsigned n_lines_context = 2);
   void single_step_instruction();
   void single_step_instruction_with_breakpoint_check();
   siginfo_t get_signal_info();
-  void set_breakpoint_at_source_line(const std::string& file, unsigned line);
+  void set_breakpoint_at_source_line(const std::string &file, unsigned line);
   uint64_t offset_dwarf_address(uint64_t addr);
+  void step_out();
+  void remove_breakpoint(std::intptr_t addr);
+  uint64_t read_memory(uint64_t address);
+  void step_in();
+  uint64_t get_offset_pc();
 
   std::string m_prog_name;
   pid_t m_pid;

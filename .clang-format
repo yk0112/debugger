@@ -1,5 +1,5 @@
 # デフォルト設定
-BasedOnStyle: Google
+BasedOnStyle: LLVM
 
 # インデント幅
 # IndentWidth: 4
