@@ -17,7 +17,7 @@
 #include "../include/register.hpp"
 #include "../modules/linenoise/linenoise.h"
 
-std::vector<std::string> split(const std::string& s, char delimiter) {
+std::vector<std::string> split(const std::string &s, char delimiter) {
   std::vector<std::string> out{};
   std::stringstream ss{s};
   std::string item;
@@ -27,13 +27,15 @@ std::vector<std::string> split(const std::string& s, char delimiter) {
   return out;
 }
 
-bool is_prefix(const std::string& s, const std::string& of) {
-  if (s.size() > of.size()) return false;
+bool is_prefix(const std::string &s, const std::string &of) {
+  if (s.size() > of.size())
+    return false;
   return std::equal(s.begin(), s.end(), of.begin());
 }
 
-bool is_suffix(const std::string& s, const std::string& of) {
-  if (s.size() > of.size()) return false;
+bool is_suffix(const std::string &s, const std::string &of) {
+  if (s.size() > of.size())
+    return false;
   auto diff = of.size() - s.size();
   return std::equal(s.begin(), s.end(), of.begin() + diff);
 }
@@ -57,7 +59,7 @@ uint64_t debugger::get_pc() { return get_register_value(m_pid, reg::rip); }
 void debugger::set_pc(uint64_t pc) { set_register_value(m_pid, reg::rip, pc); }
 
 void debugger::step_over_breakpoint() {
-  auto& bp = m_breakpoints.at(get_pc());
+  auto &bp = m_breakpoints.at(get_pc());
   if (bp.is_enable()) {
     bp.disable();
     ptrace(PTRACE_SINGLESTEP, m_pid, nullptr, nullptr);
@@ -84,31 +86,31 @@ void debugger::wait_for_signal() {
   int wait_status;
   auto options = 0;
 
-  auto siginfo = get_signal_info();  // type: siginfo_t
+  auto siginfo = get_signal_info(); // type: siginfo_t
 
   switch (siginfo.si_signo) {
-    case SIGTRAP:
-      handle_sigtrap(siginfo);
-      break;
-    case SIGSEGV:
-      std::cout << "Yay, segfault. Reason: " << siginfo.si_code << std::endl;
-      break;
-    default:
-      std::cout << "Got signal " << strsignal(siginfo.si_signo) << std::endl;
+  case SIGTRAP:
+    handle_sigtrap(siginfo);
+    break;
+  case SIGSEGV:
+    std::cout << "Yay, segfault. Reason: " << siginfo.si_code << std::endl;
+    break;
+  default:
+    std::cout << "Got signal " << strsignal(siginfo.si_signo) << std::endl;
   }
   waitpid(m_pid, &wait_status, options);
 }
 
 void debugger::print_all_breakpoint() {
-  for (auto&& point : m_breakpoints) {
+  for (auto &&point : m_breakpoints) {
     std::cout << point.first << "\n";
   }
 }
 
 dwarf::die debugger::get_function_from_pc(uint64_t pc) {
-  for (auto& cu : m_dwarf.compilation_units()) {
+  for (auto &cu : m_dwarf.compilation_units()) {
     if (die_pc_range(cu.root()).contains(pc)) {
-      for (const auto& die : cu.root()) {
+      for (const auto &die : cu.root()) {
         if (die.tag == dwarf::DW_TAG::subprogram) {
           if (die_pc_range(die).contains(pc)) {
             return die;
@@ -121,9 +123,9 @@ dwarf::die debugger::get_function_from_pc(uint64_t pc) {
 }
 
 dwarf::line_table::iterator debugger::get_line_entry_from_pc(uint64_t pc) {
-  for (auto& cu : m_dwarf.compilation_units()) {
+  for (auto &cu : m_dwarf.compilation_units()) {
     if (die_pc_range(cu.root()).contains(pc)) {
-      auto& lt = cu.get_line_table();
+      auto &lt = cu.get_line_table();
       auto it = lt.find_address(pc);
       if (it == lt.end()) {
         throw std::out_of_range{"Cannot find line entry"};
@@ -151,27 +153,27 @@ uint64_t debugger::offset_load_address(uint64_t addr) {
 
 void debugger::handle_sigtrap(siginfo_t info) {
   switch (info.si_code) {
-    case SI_KERNEL:
-    case TRAP_BRKPT: {
-      set_pc(get_pc() - 1);
-      std::cout << "Hit breakpoint at address 0x" << std::hex << get_pc()
-                << std::endl;
-      auto offset_pc = offset_load_address(get_pc());
-      auto line_entry = get_line_entry_from_pc(offset_pc);
-      print_source(line_entry->file->path, line_entry->line);
-      return;
-    }
-    case TRAP_TRACE:
-      return;
-    default:
-      std::cout << "Unknown SIGTRAP code " << info.si_code << std::endl;
-      return;
+  case SI_KERNEL:
+  case TRAP_BRKPT: {
+    set_pc(get_pc() - 1);
+    std::cout << "Hit breakpoint at address 0x" << std::hex << get_pc()
+              << std::endl;
+    auto offset_pc = offset_load_address(get_pc());
+    auto line_entry = get_line_entry_from_pc(offset_pc);
+    print_source(line_entry->file->path, line_entry->line);
+    return;
+  }
+  case TRAP_TRACE:
+    return;
+  default:
+    std::cout << "Unknown SIGTRAP code " << info.si_code << std::endl;
+    return;
   }
 }
 
 void debugger::print_source(
-    const std::string& filename, unsigned line,
-    unsigned n_lines_context) {  // n_lines_context == 周辺を何行表示するか
+    const std::string &filename, unsigned line,
+    unsigned n_lines_context) { // n_lines_context == 周辺を何行表示するか
   std::ifstream file{filename};
   auto start_line = line <= n_lines_context ? 1 : line - n_lines_context;
   auto end_line = line + n_lines_context +
@@ -200,7 +202,7 @@ void debugger::print_source(
 siginfo_t debugger::get_signal_info() {
   siginfo_t info;
   ptrace(PTRACE_GETSIGINFO, m_pid, nullptr,
-         &info);  // get last signal prosess recived
+         &info); // get last signal prosess recived
   return info;
 }
 
@@ -208,16 +210,16 @@ uint64_t debugger::offset_dwarf_address(uint64_t addr) {
   return addr + m_load_address;
 }
 
-void debugger::set_breakpoint_at_source_line(const std::string& file,
+void debugger::set_breakpoint_at_source_line(const std::string &file,
                                              unsigned line) {
-  for (const auto& cu : m_dwarf.compilation_units()) {
+  for (const auto &cu : m_dwarf.compilation_units()) {
     std::cout << at_name(cu.root()) << "\n";
 
-    if (is_suffix(file, at_name(cu.root()))) {  // root(): CUのパスを返す
-      const auto& lt = cu.get_line_table();
+    if (is_suffix(file, at_name(cu.root()))) { // root(): CUのパスを返す
+      const auto &lt = cu.get_line_table();
       std::cout << "OK \n";
 
-      for (const auto& entry : lt) {
+      for (const auto &entry : lt) {
         std::cout << entry.line << "\n";
         if (entry.is_stmt && entry.line == line) {
           std::cout << "OKOK \n";
@@ -229,7 +231,7 @@ void debugger::set_breakpoint_at_source_line(const std::string& file,
   }
 }
 
-void debugger::handle_command(const std::string& line) {
+void debugger::handle_command(const std::string &line) {
   auto args = split(line, ' ');
   auto command = args[0];
 
@@ -270,7 +272,7 @@ void debugger::handle_command(const std::string& line) {
 }
 
 void debugger::dump_registers() {
-  for (const auto& rd : g_register_descriptors) {
+  for (const auto &rd : g_register_descriptors) {
     std::cout << rd.name << " 0x" << std::setfill('0') << std::setw(16)
               << std::hex << get_register_value(m_pid, rd.r) << "\n";
   }
@@ -280,7 +282,7 @@ void debugger::run() {
   wait_for_signal();
   initialise_load_address();
 
-  char* line = nullptr;
+  char *line = nullptr;
   while ((line = linenoise("minidbg> ")) != nullptr) {
     handle_command(line);
     linenoiseHistoryAdd(line);
@@ -297,7 +299,7 @@ void execute_debugee(const std::string prog_name) {
   execl(prog_name.c_str(), prog_name.c_str(), nullptr);
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
   if (argc < 2) {
     std::cerr << "Pleae specify the program" << '\n';
     return -1;
