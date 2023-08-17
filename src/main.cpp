@@ -48,8 +48,7 @@ void debugger::set_breakpoint_at_address(std::intptr_t addr) {
 }
 
 void debugger::continue_execution() {
-  std::cout << get_pc() << "\n";
-  // step_over_breakpoint();
+  step_over_breakpoint();
   ptrace(PTRACE_CONT, m_pid, nullptr, nullptr);
   wait_for_signal();
 }
@@ -58,23 +57,113 @@ uint64_t debugger::get_pc() { return get_register_value(m_pid, reg::rip); }
 
 void debugger::set_pc(uint64_t pc) { set_register_value(m_pid, reg::rip, pc); }
 
+void debugger::remove_breakpoint(std::intptr_t addr) {
+  if (m_breakpoints.at(addr).is_enable()) {
+    m_breakpoints.at(addr).disable();
+  }
+  m_breakpoints.erase(addr);
+}
+
+uint64_t debugger::read_memory(uint64_t address) {
+  return ptrace(PTRACE_PEEKDATA, m_pid, address, nullptr);
+}
+
+uint64_t debugger::get_offset_pc() { return offset_load_address(get_pc()); }
+
 void debugger::step_over_breakpoint() {
-  auto &bp = m_breakpoints.at(get_pc());
-  if (bp.is_enable()) {
-    bp.disable();
-    ptrace(PTRACE_SINGLESTEP, m_pid, nullptr, nullptr);
-    wait_for_signal();
-    bp.enable();
+  if (m_breakpoints.count(get_pc())) {
+    auto &bp = m_breakpoints.at(get_pc());
+    if (bp.is_enable()) {
+      bp.disable();
+      ptrace(PTRACE_SINGLESTEP, m_pid, nullptr, nullptr);
+      wait_for_signal();
+      bp.enable();
+    }
+  }
+}
+
+void debugger::step_out() {
+  auto frame_pointer = get_register_value(m_pid, reg::rbp);
+  auto return_address = read_memory(frame_pointer + 8);
+
+  bool should_remove_breakpoint = false;
+  if (!m_breakpoints.count(return_address)) {
+    set_breakpoint_at_address(return_address);
+    should_remove_breakpoint = true;
+  }
+  continue_execution();
+
+  if (should_remove_breakpoint) {
+    remove_breakpoint(return_address);
+  }
+}
+
+void debugger::step_in() {
+  auto line = get_line_entry_from_pc(get_offset_pc())->line;
+  unsigned int now = line;
+  while (now == line) {
+    try {
+      std::cout << "before \n";
+      single_step_instruction_with_breakpoint_check();
+      now = get_line_entry_from_pc(get_offset_pc())->line;
+      std::cout << "after \n";
+    } catch (const std::exception &e) {
+      std::cout << "OK \n";
+      single_step_instruction_with_breakpoint_check();
+    }
+  }
+  std::cout << "next \n";
+  // auto line_entry = get_line_entry_from_pc(get_offset_pc());
+  // print_source(line_entry->file->path, line_entry->line);
+  try {
+    auto line_entry = get_line_entry_from_pc(get_offset_pc());
+    print_source(line_entry->file->path, line_entry->line);
+  } catch (const std::exception &e) {
+    std::cout << "Wow \n";
+  }
+}
+
+void debugger::step_over() {
+  auto func = get_function_from_pc(get_offset_pc());
+  auto func_entry = at_low_pc(func);
+  auto func_end = at_high_pc(func); // return uint64_t
+
+  auto line = get_line_entry_from_pc(func_entry); // function start line
+  auto start_line = get_line_entry_from_pc(get_offset_pc()); // now line
+
+  std::vector<std::intptr_t> to_delete{};
+
+  while (line->address < func_end) {
+    auto load_address = offset_dwarf_address(line->address);
+    if (line->address != start_line->address &&
+        !m_breakpoints.count(load_address)) {
+      set_breakpoint_at_address(load_address);
+      to_delete.push_back(load_address);
+    }
+    ++line;
+  }
+
+  auto frame_pointer = get_register_value(m_pid, reg::rbp);
+  auto return_address = read_memory(frame_pointer + 8);
+  if (!m_breakpoints.count(return_address)) {
+    set_breakpoint_at_address(return_address);
+    to_delete.push_back(return_address);
+  }
+
+  continue_execution();
+
+  for (auto addr : to_delete) {
+    remove_breakpoint(addr);
   }
 }
 
 void debugger::single_step_instruction() {
+  std::cout << "OK2 \n";
   ptrace(PTRACE_SINGLESTEP, m_pid, nullptr, nullptr);
   wait_for_signal();
 }
 
 void debugger::single_step_instruction_with_breakpoint_check() {
-  // first, check to see if we need to disable and enable a breakpoint
   if (m_breakpoints.count(get_pc())) {
     step_over_breakpoint();
   } else {
@@ -85,6 +174,7 @@ void debugger::single_step_instruction_with_breakpoint_check() {
 void debugger::wait_for_signal() {
   int wait_status;
   auto options = 0;
+  waitpid(m_pid, &wait_status, options);
 
   auto siginfo = get_signal_info(); // type: siginfo_t
 
@@ -98,7 +188,6 @@ void debugger::wait_for_signal() {
   default:
     std::cout << "Got signal " << strsignal(siginfo.si_signo) << std::endl;
   }
-  waitpid(m_pid, &wait_status, options);
 }
 
 void debugger::print_all_breakpoint() {
@@ -128,13 +217,13 @@ dwarf::line_table::iterator debugger::get_line_entry_from_pc(uint64_t pc) {
       auto &lt = cu.get_line_table();
       auto it = lt.find_address(pc);
       if (it == lt.end()) {
-        throw std::out_of_range{"Cannot find line entry"};
+        throw std::out_of_range{"Cannot find line entry 1"};
       } else {
         return it;
       }
     }
   }
-  throw std::out_of_range{"Cannot find line entry"};
+  throw std::out_of_range{"Cannot find line entry 2"};
 }
 
 void debugger::initialise_load_address() {
@@ -149,6 +238,10 @@ void debugger::initialise_load_address() {
 
 uint64_t debugger::offset_load_address(uint64_t addr) {
   return addr - m_load_address;
+}
+
+uint64_t debugger::offset_dwarf_address(uint64_t addr) {
+  return addr + m_load_address;
 }
 
 void debugger::handle_sigtrap(siginfo_t info) {
@@ -206,23 +299,14 @@ siginfo_t debugger::get_signal_info() {
   return info;
 }
 
-uint64_t debugger::offset_dwarf_address(uint64_t addr) {
-  return addr + m_load_address;
-}
-
 void debugger::set_breakpoint_at_source_line(const std::string &file,
                                              unsigned line) {
   for (const auto &cu : m_dwarf.compilation_units()) {
-    std::cout << at_name(cu.root()) << "\n";
-
     if (is_suffix(file, at_name(cu.root()))) { // root(): CUのパスを返す
       const auto &lt = cu.get_line_table();
-      std::cout << "OK \n";
 
       for (const auto &entry : lt) {
-        std::cout << entry.line << "\n";
         if (entry.is_stmt && entry.line == line) {
-          std::cout << "OKOK \n";
           set_breakpoint_at_address(offset_dwarf_address(entry.address));
           return;
         }
@@ -248,6 +332,12 @@ void debugger::handle_command(const std::string &line) {
     } else {
       std::cout << "miss command \n";
     }
+  } else if (is_prefix(command, "step")) {
+    step_in();
+  } else if (is_prefix(command, "next")) {
+    step_over();
+  } else if (is_prefix(command, "finish")) {
+    step_out();
   } else if (is_prefix(command, "stepi")) {
     single_step_instruction_with_breakpoint_check();
     auto line_entry = get_line_entry_from_pc(get_pc());
