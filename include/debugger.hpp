@@ -29,10 +29,18 @@ private:
   void step_over_breakpoint();
   void wait_for_signal();
   void print_all_breakpoint();
+
+  // 与えられたpcにおける命令が含まれている関数のdieを返す
   auto get_function_from_pc(uint64_t pc) -> dwarf::die;
+
+  // 与えられたpcにおける命令のlina tabelのentryのイテレータを返す
   auto get_line_entry_from_pc(uint64_t pc) -> dwarf::line_table::iterator;
+
   void initialise_load_address();
+
+  //ロードアドレスからの相対アドレスを返す
   uint64_t offset_load_address(uint64_t addr);
+
   void handle_sigtrap(siginfo_t info);
   void print_source(const std::string &file_name, unsigned line,
                     unsigned n_lines_context = 2);
@@ -40,12 +48,19 @@ private:
   void single_step_instruction_with_breakpoint_check();
   siginfo_t get_signal_info();
   void set_breakpoint_at_source_line(const std::string &file, unsigned line);
-  uint64_t offset_dwarf_address(uint64_t addr);
   void step_out();
   void remove_breakpoint(std::intptr_t addr);
   uint64_t read_memory(uint64_t address);
   void step_in();
+
+  //現在のアドレスの相対アドレスを返す
   uint64_t get_offset_pc();
+
+  //ロードアドレスを返す
+  uint64_t offset_dwarf_address(uint64_t addr);
+
+  // step over
+  void step_over();
 
   std::string m_prog_name;
   pid_t m_pid;

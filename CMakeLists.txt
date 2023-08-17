@@ -12,16 +12,12 @@ set_target_properties(hello
 
 add_executable(test examples/test.cpp)
 set_target_properties(test
-                      PROPERTIES COMPILE_FLAGS "-g -O0")                      
-# add_executable(variable examples/variable.cpp)
-# set_target_properties(variable
-#                       PROPERTIES COMPILE_FLAGS "-gdwarf-2 -O0")
-
-# add_executable(unwinding examples/stack_unwinding.cpp)
-# set_target_properties(unwinding
-#                       PROPERTIES COMPILE_FLAGS "-g -O0")
-
-
+                      PROPERTIES COMPILE_FLAGS "-g -O0")       
+                      
+add_executable(test2 examples/test2.cpp)
+set_target_properties(test2
+                      PROPERTIES COMPILE_FLAGS "-g -O0")  
+                      
 add_custom_target(
    libelfin
    COMMAND make
