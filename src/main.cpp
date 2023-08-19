@@ -40,9 +40,11 @@ bool is_suffix(const std::string &s, const std::string &of) {
   return std::equal(s.begin(), s.end(), of.begin() + diff);
 }
 
-void debugger::set_breakpoint_at_address(std::intptr_t addr) {
-  std::cout << "set break point at address " << std::hex << addr << "\n";
-  breakpoint bp{m_pid, addr};
+void debugger::set_breakpoint_at_address(std::intptr_t addr, bool is_print) {
+  if (is_print) {
+    std::cout << "set break point at address " << std::hex << addr << "\n";
+  }
+  breakpoint bp{m_pid, addr, is_print};
   bp.enable();
   m_breakpoints.emplace(addr, bp);
 }
@@ -88,7 +90,7 @@ void debugger::step_out() {
 
   bool should_remove_breakpoint = false;
   if (!m_breakpoints.count(return_address)) {
-    set_breakpoint_at_address(return_address);
+    set_breakpoint_at_address(return_address, false);
     should_remove_breakpoint = true;
   }
   continue_execution();
@@ -100,36 +102,28 @@ void debugger::step_out() {
 
 void debugger::step_in() {
   auto line = get_line_entry_from_pc(get_offset_pc())->line;
+  auto before_pc = get_offset_pc();
   unsigned int now = line;
   while (now == line) {
     try {
-      std::cout << "before \n";
       single_step_instruction_with_breakpoint_check();
       now = get_line_entry_from_pc(get_offset_pc())->line;
-      std::cout << "after \n";
     } catch (const std::exception &e) {
-      std::cout << "OK \n";
-      single_step_instruction_with_breakpoint_check();
+      step_over(before_pc);
+      return;
     }
   }
-  std::cout << "next \n";
-  // auto line_entry = get_line_entry_from_pc(get_offset_pc());
-  // print_source(line_entry->file->path, line_entry->line);
-  try {
-    auto line_entry = get_line_entry_from_pc(get_offset_pc());
-    print_source(line_entry->file->path, line_entry->line);
-  } catch (const std::exception &e) {
-    std::cout << "Wow \n";
-  }
+  auto line_entry = get_line_entry_from_pc(get_offset_pc());
+  print_source(line_entry->file->path, line_entry->line);
 }
 
-void debugger::step_over() {
-  auto func = get_function_from_pc(get_offset_pc());
+void debugger::step_over(uint64_t addr) {
+  auto func = get_function_from_pc(addr);
   auto func_entry = at_low_pc(func);
   auto func_end = at_high_pc(func); // return uint64_t
 
   auto line = get_line_entry_from_pc(func_entry); // function start line
-  auto start_line = get_line_entry_from_pc(get_offset_pc()); // now line
+  auto start_line = get_line_entry_from_pc(addr); // now line
 
   std::vector<std::intptr_t> to_delete{};
 
@@ -137,7 +131,7 @@ void debugger::step_over() {
     auto load_address = offset_dwarf_address(line->address);
     if (line->address != start_line->address &&
         !m_breakpoints.count(load_address)) {
-      set_breakpoint_at_address(load_address);
+      set_breakpoint_at_address(load_address, false);
       to_delete.push_back(load_address);
     }
     ++line;
@@ -146,7 +140,7 @@ void debugger::step_over() {
   auto frame_pointer = get_register_value(m_pid, reg::rbp);
   auto return_address = read_memory(frame_pointer + 8);
   if (!m_breakpoints.count(return_address)) {
-    set_breakpoint_at_address(return_address);
+    set_breakpoint_at_address(return_address, false);
     to_delete.push_back(return_address);
   }
 
@@ -158,7 +152,6 @@ void debugger::step_over() {
 }
 
 void debugger::single_step_instruction() {
-  std::cout << "OK2 \n";
   ptrace(PTRACE_SINGLESTEP, m_pid, nullptr, nullptr);
   wait_for_signal();
 }
@@ -201,7 +194,8 @@ dwarf::die debugger::get_function_from_pc(uint64_t pc) {
     if (die_pc_range(cu.root()).contains(pc)) {
       for (const auto &die : cu.root()) {
         if (die.tag == dwarf::DW_TAG::subprogram) {
-          if (die_pc_range(die).contains(pc)) {
+          // die_pc_rangeが原因, DIE does not have attribute DW_AT_low_pc
+          if (die.has(dwarf::DW_AT::low_pc) && die_pc_range(die).contains(pc)) {
             return die;
           }
         }
@@ -217,13 +211,13 @@ dwarf::line_table::iterator debugger::get_line_entry_from_pc(uint64_t pc) {
       auto &lt = cu.get_line_table();
       auto it = lt.find_address(pc);
       if (it == lt.end()) {
-        throw std::out_of_range{"Cannot find line entry 1"};
+        throw std::out_of_range{"Cannot find line entry"};
       } else {
         return it;
       }
     }
   }
-  throw std::out_of_range{"Cannot find line entry 2"};
+  throw std::out_of_range{"Cannot find line entry"};
 }
 
 void debugger::initialise_load_address() {
@@ -249,8 +243,11 @@ void debugger::handle_sigtrap(siginfo_t info) {
   case SI_KERNEL:
   case TRAP_BRKPT: {
     set_pc(get_pc() - 1);
-    std::cout << "Hit breakpoint at address 0x" << std::hex << get_pc()
-              << std::endl;
+
+    if (m_breakpoints.at(get_pc()).is_users_breakpoint) {
+      std::cout << "Hit breakpoint at address 0x" << std::hex << get_pc()
+                << std::endl;
+    }
     auto offset_pc = offset_load_address(get_pc());
     auto line_entry = get_line_entry_from_pc(offset_pc);
     print_source(line_entry->file->path, line_entry->line);
@@ -307,7 +304,7 @@ void debugger::set_breakpoint_at_source_line(const std::string &file,
 
       for (const auto &entry : lt) {
         if (entry.is_stmt && entry.line == line) {
-          set_breakpoint_at_address(offset_dwarf_address(entry.address));
+          set_breakpoint_at_address(offset_dwarf_address(entry.address), true);
           return;
         }
       }
@@ -319,12 +316,12 @@ void debugger::handle_command(const std::string &line) {
   auto args = split(line, ' ');
   auto command = args[0];
 
-  if (is_prefix(command, "continue")) {
+  if (is_prefix(command, "cont")) {
     continue_execution();
   } else if (is_prefix(command, "break")) {
     if (args[1][0] == '0' && args[1][1] == 'x') {
       std::string addr{args[1], 2};
-      set_breakpoint_at_address(std::stol(addr, 0, 16));
+      set_breakpoint_at_address(std::stol(addr, 0, 16), true);
     } else if (args[1].find(':') != std::string::npos) {
       auto file_and_line = split(args[1], ':');
       set_breakpoint_at_source_line(file_and_line[1],
@@ -335,7 +332,7 @@ void debugger::handle_command(const std::string &line) {
   } else if (is_prefix(command, "step")) {
     step_in();
   } else if (is_prefix(command, "next")) {
-    step_over();
+    step_over(get_offset_pc());
   } else if (is_prefix(command, "finish")) {
     step_out();
   } else if (is_prefix(command, "stepi")) {
