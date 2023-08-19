@@ -22,7 +22,7 @@ public:
 private:
   void handle_command(const std::string &line);
   void continue_execution();
-  void set_breakpoint_at_address(std::intptr_t addr);
+  void set_breakpoint_at_address(std::intptr_t addr, bool is_print);
   void dump_registers();
   void set_pc(uint64_t pc);
   uint64_t get_pc();
@@ -60,7 +60,7 @@ private:
   uint64_t offset_dwarf_address(uint64_t addr);
 
   // step over
-  void step_over();
+  void step_over(uint64_t addr);
 
   std::string m_prog_name;
   pid_t m_pid;
