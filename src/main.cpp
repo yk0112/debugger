@@ -40,13 +40,59 @@ bool is_suffix(const std::string &s, const std::string &of) {
   return std::equal(s.begin(), s.end(), of.begin() + diff);
 }
 
-void debugger::set_breakpoint_at_address(std::intptr_t addr, bool is_print) {
-  if (is_print) {
-    std::cout << "set break point at address " << std::hex << addr << "\n";
+std::string to_string(symbol_type st) {
+  switch (st) {
+  case symbol_type::notype:
+    return "NOTYPE";
+  case symbol_type::file:
+    return "FILE";
+  case symbol_type::object:
+    return "OBJECT";
+  case symbol_type::section:
+    return "SECTION";
+  case symbol_type::func:
+    return "FUNCTION";
+  default:
+    return "Not found type";
   }
-  breakpoint bp{m_pid, addr, is_print};
-  bp.enable();
-  m_breakpoints.emplace(addr, bp);
+}
+
+symbol_type to_symbol_type(elf::stt sym) {
+  switch (sym) {
+  case elf::stt::notype:
+    return symbol_type::notype;
+  case elf::stt::object:
+    return symbol_type::object;
+  case elf::stt::func:
+    return symbol_type::func;
+  case elf::stt::section:
+    return symbol_type::section;
+  case elf::stt::file:
+    return symbol_type::file;
+  default:
+    return symbol_type::notype;
+  }
+};
+
+std::vector<symbol> debugger::lookup_symbol(
+    const std::string &name) { // 検索するtype(obj,func,file...)毎に区別すべき?
+  std::vector<symbol> syms;
+
+  for (auto &sec : m_elf.sections()) {
+    if (sec.get_hdr().type != elf::sht::symtab &&
+        sec.get_hdr().type != elf::sht::dynsym)
+      continue;
+
+    for (auto sym : sec.as_symtab()) {
+      if (sym.get_name() == name) {
+        auto &d = sym.get_data();
+        syms.push_back(
+            symbol{to_symbol_type(d.type()), sym.get_name(), d.value});
+      }
+    }
+  }
+
+  return syms;
 }
 
 void debugger::continue_execution() {
@@ -296,10 +342,32 @@ siginfo_t debugger::get_signal_info() {
   return info;
 }
 
+void debugger::set_breakpoint_at_address(std::intptr_t addr, bool is_print) {
+  if (is_print) {
+    std::cout << "set break point at address " << std::hex << addr << "\n";
+  }
+  breakpoint bp{m_pid, addr, is_print};
+  bp.enable();
+  m_breakpoints.emplace(addr, bp);
+}
+
+void debugger::set_breakpoint_at_function(const std::string &name) {
+  for (const auto &cu : m_dwarf.compilation_units()) {
+    for (const auto &die : cu.root()) {
+      if (die.has(dwarf::DW_AT::name) && at_name(die) == name) {
+        auto low_pc = at_low_pc(die);
+        auto entry = get_line_entry_from_pc(low_pc);
+        ++entry;
+        set_breakpoint_at_address(offset_dwarf_address(entry->address), true);
+      }
+    }
+  }
+}
+
 void debugger::set_breakpoint_at_source_line(const std::string &file,
                                              unsigned line) {
   for (const auto &cu : m_dwarf.compilation_units()) {
-    if (is_suffix(file, at_name(cu.root()))) { // root(): CUのパスを返す
+    if (is_suffix(file, at_name(cu.root()))) {
       const auto &lt = cu.get_line_table();
 
       for (const auto &entry : lt) {
@@ -327,7 +395,7 @@ void debugger::handle_command(const std::string &line) {
       set_breakpoint_at_source_line(file_and_line[1],
                                     std::stoi(file_and_line[0]));
     } else {
-      std::cout << "miss command \n";
+      set_breakpoint_at_function(args[1]);
     }
   } else if (is_prefix(command, "step")) {
     step_in();
@@ -353,6 +421,16 @@ void debugger::handle_command(const std::string &line) {
     }
   } else if (is_prefix(command, "all")) {
     print_all_breakpoint();
+  } else if (is_prefix(command, "symbol")) {
+    auto syms = lookup_symbol(args[1]);
+    if (syms.empty()) {
+      std::cout << "Not found symbol \n";
+    } else {
+      for (auto &&s : syms) {
+        std::cout << s.name << ' ' << to_string(s.type) << " 0x" << std::hex
+                  << s.addr << std::endl; // 相対アドレス
+      }
+    }
   } else {
     std::cerr << "unknown command \n";
   }
