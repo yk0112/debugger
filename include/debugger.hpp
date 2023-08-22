@@ -7,6 +7,21 @@
 
 #include "dwarf/dwarf++.hh"
 #include "elf/elf++.hh"
+
+enum class symbol_type {
+  notype,  //ファイル内に実体を持たないオブジェクト
+  object,  // 変数,定数など
+  func,    // 関数
+  section, // 再配置のために存在するエントリ
+  file     //生成元のソースファイル名
+};
+
+struct symbol {
+  symbol_type type;
+  std::string name;
+  std::uintptr_t addr;
+};
+
 class debugger {
 public:
   debugger(std::string prog_name, pid_t pid)
@@ -47,7 +62,13 @@ private:
   void single_step_instruction();
   void single_step_instruction_with_breakpoint_check();
   siginfo_t get_signal_info();
+
+  //ファイル名と行番号からブレークポイントを設定
   void set_breakpoint_at_source_line(const std::string &file, unsigned line);
+
+  //関数名からブレークポイントを設定
+  void set_breakpoint_at_function(const std::string &name);
+
   void step_out();
   void remove_breakpoint(std::intptr_t addr);
   uint64_t read_memory(uint64_t address);
@@ -61,6 +82,8 @@ private:
 
   // step over
   void step_over(uint64_t addr);
+
+  std::vector<symbol> lookup_symbol(const std::string &name);
 
   std::string m_prog_name;
   pid_t m_pid;
