@@ -83,7 +83,11 @@ private:
   // step over
   void step_over(uint64_t addr);
 
+  // シンボルテーブルを参照し,指定した名前のエントリを返す
   std::vector<symbol> lookup_symbol(const std::string &name);
+
+  // バックトレースを表示する
+  void print_backtrace();
 
   std::string m_prog_name;
   pid_t m_pid;
