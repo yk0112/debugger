@@ -88,6 +88,9 @@ private:
 
   // バックトレースを表示する
   void print_backtrace();
+  
+  //関数内の変数のアドレスと値を表示する
+  void read_variables();
 
   std::string m_prog_name;
   pid_t m_pid;
