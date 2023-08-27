@@ -4,7 +4,7 @@ project (debugger)
 add_compile_options(-std=c++14)
 
 include_directories(modules/libelfin modules/linenoise include)
-add_executable(debugger src/main.cpp modules/linenoise/linenoise.c)
+add_executable(debugger src/main.cpp ./modules/linenoise/linenoise.c)
 
 add_executable(hello examples/hello.cpp)
 set_target_properties(hello
