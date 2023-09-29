@@ -62,16 +62,16 @@ void debugger::read_variables() {
         if (die.tag == DW_TAG::variable) {
             auto loc_val = die[DW_AT::location];
 
-            //only supports exprlocs for now
             if (loc_val.get_type() == value::type::exprloc) {
                 ptrace_expr_context context {m_pid, m_load_address};
                 auto result = loc_val.as_exprloc().evaluate(&context);
-
+                 
                 switch (result.location_type) {
                 case expr_result::type::address:
                 {
                     auto offset_addr = result.value;
                     auto value = read_memory(offset_addr);
+
                     std::cout << at_name(die) << " (0x" << std::hex << offset_addr << ") = " << value << std::endl;
                     break;
                 }
