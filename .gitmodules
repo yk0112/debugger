@@ -1,6 +1,7 @@
 [submodule "modules/libelfin"]
 	path = modules/libelfin
 	url = https://github.com/TartanLlama/libelfin.git
+	branch = fbreg
 [submodule "modules/linenoise"]
 	path = modules/linenoise
 	url = https://github.com/antirez/linenoise.git
