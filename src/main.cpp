@@ -27,7 +27,7 @@ public:
         return get_register_value_from_dwarf_register(m_pid, regnum);
     }
 
-    dwarf::taddr pc() override {
+    dwarf::taddr pc() {
         struct user_regs_struct regs;
         ptrace(PTRACE_GETREGS, m_pid, nullptr, &regs);
         return regs.rip - m_load_address;

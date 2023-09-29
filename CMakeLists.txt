@@ -8,15 +8,15 @@ add_executable(debugger src/main.cpp ./modules/linenoise/linenoise.c)
 
 add_executable(hello examples/hello.cpp)
 set_target_properties(hello
-                      PROPERTIES COMPILE_FLAGS "-g -O0")
+                      PROPERTIES COMPILE_FLAGS "-g -gdwarf-4 -O0")
 
 add_executable(test examples/test.cpp)
 set_target_properties(test
-                      PROPERTIES COMPILE_FLAGS "-g -O0")       
+                      PROPERTIES COMPILE_FLAGS "-g -gdwarf-4 -O0")       
                       
 add_executable(test2 examples/test2.cpp)
 set_target_properties(test2
-                      PROPERTIES COMPILE_FLAGS "-g -O0")  
+                      PROPERTIES COMPILE_FLAGS "-g -gdwarf-4 -O0")  
                       
 add_custom_target(
    libelfin
