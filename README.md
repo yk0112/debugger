@@ -2,18 +2,20 @@
 
 This is a simple ELF files debugger for my study.
 
-reference: https://blog.tartanllama.xyz/writing-a-linux-debugger-setup/
+### Environment
+- OS: Ubuntu, x86_64
+- Kernel: 22.04.2 LTS
 
-Support
+### Support
 - Setting breakpoints by line number
 - Step in, Step out, Step over execution
 - Displaying registers at breakpoints
 - Displaying the value of a variable(partial implementation)
 
-Not support
+### Not support
 - Shared library support
 
-Example
+### Example
 ```
 yk0112@yk0112pc:~/debugger/build$ ./debugger ./test3
 start debug process: 26186
@@ -41,5 +43,15 @@ b (0x7fffffffdeb0) = 2
 c (0x7fffffffdeb8) = 3
 ```
 
-
+### Command list
+```
+`break <line number>:<source file>` - Set a breakpoint on the specified line
+`cont`     - Move to next breakpoint
+`step`     - If the current line is a function, enter the function(Step in)
+`next`     - If the current line is a function, move to the next line without entering the function(Step over)
+`finish`   - If the current line is inside a function, continue processing until exiting the function(Step out)
+`register` - Display the current register value
+`all`      - Display a list of breakpoint addresses
+`variables`　- Display a list of current variable values
+```
 
